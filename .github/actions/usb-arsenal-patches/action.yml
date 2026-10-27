@@ -26,6 +26,10 @@ runs:
         # order. Each dir ships the upstream kernel-patches/<kver> set minus
         # patches already upstream at the target sublevel (those are omitted,
         # never forced):
+        # - patches/5.10: 0001 configfs unregister, 0002 pikvm-msd-dvd,
+        #   0003 bInterval, 0005 cdev_init. Upstream 0004 (f_hid move-list)
+        #   is ABSENT: already upstream in 5.10.269 (dry-run flags it
+        #   reversed/previously-applied).
         # - patches/6.6: 0001 configfs unregister, 0002 pikvm-msd-dvd,
         #   0004 cdev_init. Upstream 0003 (f_hid move-list) is ABSENT: already
         #   upstream in 6.6.143 (dry-run flags it reversed/previously-applied).
