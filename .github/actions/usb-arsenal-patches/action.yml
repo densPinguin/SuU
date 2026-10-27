@@ -1,9 +1,9 @@
 name: 'Apply USB-Arsenal Patches'
-description: 'Apply USB-Arsenal gadget/function patches ported from kernel-patches/5.15 to android14-6.1'
+description: 'Apply USB-Arsenal gadget/function patches (per-kernel-version sets under patches/<kver>/)'
 
 inputs:
   version:
-    description: 'Kernel config version (e.g., android14-6.1)'
+    description: 'Kernel config version (e.g., android14-6.1, android15-6.6)'
     required: true
   sublevel:
     description: 'Kernel sublevel'
@@ -20,14 +20,35 @@ runs:
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
         set -euo pipefail
-        PATCH_DIR="${{ github.workspace }}/.github/actions/usb-arsenal-patches/patches"
-        echo "Applying USB-Arsenal patches for ${{ inputs.version }} sublevel ${{ inputs.sublevel }} (${{ inputs.os_patch_level }})"
-        # Patches are applied in filename-sort order (0001, 0002, 0004, 0005, 0006).
-        # 0004->0005->0006 stack on drivers/usb/gadget/function/f_hid.c and must
-        # be applied in that order; the 5.15 set already ships them that way.
+        ACTION_DIR="${{ github.workspace }}/.github/actions/usb-arsenal-patches"
+        # Per-kernel-version patch sets live in patches/<kver>/ (kver derived
+        # from version, e.g. android15-6.6 -> 6.6), applied in filename-sort
+        # order. Each dir ships the upstream kernel-patches/<kver> set minus
+        # patches already upstream at the target sublevel (those are omitted,
+        # never forced):
+        # - patches/6.6: 0001 configfs unregister, 0002 pikvm-msd-dvd,
+        #   0004 cdev_init. Upstream 0003 (f_hid move-list) is ABSENT: already
+        #   upstream in 6.6.143 (dry-run flags it reversed/previously-applied).
+        # - patches/6.1: 5.15 set ported to android14-6.1 (0001, 0002,
+        #   0004 bInterval, 0005 move-list, 0006 cdev_init); the f_hid
+        #   0004->0005->0006 stack must stay in that order.
+        # Legacy fallback: patches/*.patch directly (pre-restructure layout).
+        KVER="${{ inputs.version }}"
+        KVER="${KVER##*-}"
+        PATCH_DIR="$ACTION_DIR/patches"
+        if [ -d "$PATCH_DIR/$KVER" ]; then
+          PATCH_DIR="$PATCH_DIR/$KVER"
+        fi
+        echo "Applying USB-Arsenal patches for ${{ inputs.version }} sublevel ${{ inputs.sublevel }} (${{ inputs.os_patch_level }}) from $PATCH_DIR"
+        COUNT=0
         for p in "$PATCH_DIR"/*.patch; do
           [ -f "$p" ] || continue
           echo "==> Applying $(basename "$p")"
           patch -p1 --no-backup-if-mismatch < "$p"
+          COUNT=$((COUNT + 1))
         done
-        echo "USB-Arsenal patches applied."
+        if [ "$COUNT" -eq 0 ]; then
+          echo "ERROR: no patches found in $PATCH_DIR" >&2
+          exit 1
+        fi
+        echo "USB-Arsenal patches applied ($COUNT files)."
